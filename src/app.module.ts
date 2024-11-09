@@ -2,11 +2,16 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { CacheModule } from '@nestjs/cache-manager';
 import { StatesModule } from './states/states.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    CacheModule.register({
+      isGlobal: true, // Důležité pro globální dostupnost cache
+      ttl: 60 * 60, // 1 hodina
+    }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: () => ({
