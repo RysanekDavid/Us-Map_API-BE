@@ -10,35 +10,38 @@ import {
   Query,
   UseInterceptors,
   NotFoundException,
+  HttpException,
+  HttpStatus,
   HttpCode,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { CacheInterceptor } from '@nestjs/cache-manager';
 import { StatesService } from './states.service';
+import { CensusApiService } from './census-api.service';
 import { State } from './entities/state.entity';
 import { StateSection } from './entities/state-section.entity';
 import { CreateSectionDto } from './dto/create-section.dto';
+import { TestDataSeeder } from '../database/seeds/test-data.seed';
 
 @ApiTags('states')
 @Controller('states')
 @UseInterceptors(CacheInterceptor)
 export class StatesController {
-  constructor(private readonly statesService: StatesService) {}
+  constructor(
+    private readonly statesService: StatesService,
+    private readonly censusApiService: CensusApiService,
+    private readonly testDataSeeder: TestDataSeeder,
+  ) {}
 
-  // GET /states - Získá seznam všech států
   @Get()
   @ApiOperation({ summary: 'Get all states' })
-  @ApiQuery({ name: 'political_status', required: false })
   @ApiResponse({ status: 200, type: [State] })
-  async findAll(
-    @Query('political_status') politicalStatus?: string,
-  ): Promise<State[]> {
-    return this.statesService.findAll(politicalStatus);
+  async findAll(): Promise<State[]> {
+    return this.statesService.findAll();
   }
 
-  // GET /states/:id - Získá detail jednoho státu
   @Get(':id')
-  @ApiOperation({ summary: 'Get state by ID' })
+  @ApiOperation({ summary: 'Get a state by ID' })
   @ApiResponse({ status: 200, type: State })
   @ApiResponse({ status: 404, description: 'State not found' })
   async findOne(@Param('id') id: string): Promise<State> {
@@ -49,52 +52,132 @@ export class StatesController {
     return state;
   }
 
-  // SEKCE STÁTŮ
-
-  // GET /states/:id/sections - Získá všechny sekce státu
-  @Get(':id/sections')
-  @ApiOperation({ summary: 'Get all sections of state' })
-  @ApiResponse({ status: 200, type: [StateSection] })
-  async getSections(@Param('id') id: string): Promise<StateSection[]> {
-    return this.statesService.getSections(+id);
+  @Post('initialize')
+  @ApiOperation({ summary: 'Initialize database with test data' })
+  @ApiResponse({
+    status: 200,
+    description: 'Database initialized with test data',
+  })
+  async initializeDatabase() {
+    try {
+      await this.testDataSeeder.seed();
+      return {
+        success: true,
+        message: 'Database initialized with test data successfully',
+      };
+    } catch (error) {
+      console.error('Failed to initialize database:', error);
+      throw new HttpException(
+        'Failed to initialize database',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
-  // POST /states/:id/sections - Přidá novou sekci ke státu
-  @Post(':id/sections')
-  @ApiOperation({ summary: 'Add section to state' })
-  @ApiResponse({ status: 201, type: StateSection })
-  async addSection(
-    @Param('id') id: string,
-    @Body() createSectionDto: CreateSectionDto,
-  ): Promise<StateSection> {
-    return this.statesService.addSection(+id, createSectionDto);
+  // src/states/states.controller.ts
+  // ... ostatní importy zůstávají stejné ...
+
+  @Post(':id/census')
+  @ApiOperation({ summary: 'Update state with latest census data' })
+  @ApiResponse({ status: 200, type: State })
+  async updateStateCensusData(@Param('id') id: string): Promise<State> {
+    try {
+      console.log(`Starting census data update for state ID: ${id}`);
+
+      // Debug log pro ID
+      console.log('Received ID:', id, 'Type:', typeof id);
+
+      const state = await this.statesService.findOne(+id);
+      console.log('Found state:', state);
+
+      const stateFips = state.census_metadata?.state_fips;
+      console.log('FIPS code:', stateFips);
+
+      if (!stateFips) {
+        throw new HttpException(
+          `No FIPS code found for state: ${state.name}`,
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      // Fetch all census data
+      const [demographics, housing, education] = await Promise.all([
+        this.censusApiService.getStateDemographics(stateFips).catch((error) => {
+          console.error('Demographics fetch error:', error);
+          return null;
+        }),
+        this.censusApiService.getStateHousingData(stateFips).catch((error) => {
+          console.error('Housing fetch error:', error);
+          return null;
+        }),
+        this.censusApiService
+          .getStateEducationData(stateFips)
+          .catch((error) => {
+            console.error('Education fetch error:', error);
+            return null;
+          }),
+      ]);
+
+      // Prepare update data with null checks
+      const updateData: Partial<State> = {
+        ...state,
+        census_metadata: {
+          state_fips: stateFips,
+          last_updated: new Date(),
+        },
+      };
+
+      if (demographics) {
+        updateData.population = demographics.totalPopulation;
+        updateData.household_income = demographics.medianHouseholdIncome;
+        updateData.unemployment_rate =
+          (demographics.unemploymentCount / demographics.totalPopulation) * 100;
+      }
+
+      if (housing) {
+        updateData.median_home_value = housing.medianHomeValue;
+        updateData.median_rent = housing.medianRent;
+      }
+
+      if (education) {
+        updateData.higher_education_total = education.higherEducationTotal;
+        updateData.education_breakdown = education.educationBreakdown;
+      }
+
+      console.log('Updating state with data:', updateData);
+
+      // Save the updated state
+      try {
+        const updatedState = await this.statesService.update(+id, updateData);
+        console.log('State updated successfully');
+        return updatedState;
+      } catch (saveError) {
+        console.error('Error saving state:', saveError);
+        throw new HttpException(
+          `Failed to save state data: ${saveError.message}`,
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      }
+    } catch (error) {
+      console.error('Controller Error:', error);
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        `Failed to update census data: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
-  // PUT /states/:stateId/sections/:sectionId - Aktualizuje sekci
-  @Put(':stateId/sections/:sectionId')
-  @ApiOperation({ summary: 'Update section' })
-  @ApiResponse({ status: 200, type: StateSection })
-  async updateSection(
-    @Param('stateId') stateId: string,
-    @Param('sectionId') sectionId: string,
-    @Body() updateSectionDto: CreateSectionDto,
-  ): Promise<StateSection> {
-    return this.statesService.updateSection(
-      +stateId,
-      +sectionId,
-      updateSectionDto,
+  @Post('census/update-all')
+  @ApiOperation({ summary: 'Update all states with latest census data' })
+  @ApiResponse({ status: 200, type: [State] })
+  async updateAllStatesCensusData(): Promise<State[]> {
+    const states = await this.statesService.findAll();
+    const updatedStates = await Promise.all(
+      states.map((state) => this.updateStateCensusData(state.id.toString())),
     );
-  }
-
-  // DELETE /states/:stateId/sections/:sectionId - Smaže sekci
-  @Delete(':stateId/sections/:sectionId')
-  @HttpCode(204)
-  @ApiOperation({ summary: 'Delete section' })
-  @ApiResponse({ status: 204, description: 'Section deleted' })
-  async deleteSection(
-    @Param('stateId') stateId: string,
-    @Param('sectionId') sectionId: string,
-  ): Promise<void> {
-    await this.statesService.deleteSection(+stateId, +sectionId);
+    return updatedStates;
   }
 }

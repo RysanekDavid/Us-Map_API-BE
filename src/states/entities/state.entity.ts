@@ -8,7 +8,6 @@ export enum PoliticalStatus {
   SWING = 'swing',
   LEAN_REP = 'lean-rep',
   SOLID_REP = 'solid-rep',
-  INDEPENDENT = 'independent-territory',
 }
 
 @Entity('states')
@@ -22,7 +21,7 @@ export class State {
   @Column()
   capital: string;
 
-  @Column()
+  @Column('bigint', { nullable: true })
   population: number;
 
   @Column()
@@ -31,10 +30,39 @@ export class State {
   @Column({
     type: 'enum',
     enum: PoliticalStatus,
+    enumName: 'political_status_enum', // Přidáno pro lepší správu enumu
   })
   political_status: PoliticalStatus;
 
-  // Přidáváme vztah OneToMany
+  @Column('decimal', { precision: 10, scale: 2, nullable: true })
+  household_income: number;
+
+  @Column('decimal', { precision: 5, scale: 2, nullable: true })
+  unemployment_rate: number;
+
+  @Column('decimal', { precision: 10, scale: 2, nullable: true })
+  median_home_value: number;
+
+  @Column('decimal', { precision: 7, scale: 2, nullable: true })
+  median_rent: number;
+
+  @Column('bigint', { nullable: true })
+  higher_education_total: number;
+
+  @Column('jsonb', { nullable: true })
+  education_breakdown: {
+    bachelors: number;
+    masters: number;
+    professional: number;
+    doctorate: number;
+  };
+
+  @Column('jsonb', { nullable: true })
+  census_metadata: {
+    last_updated: Date;
+    state_fips: string;
+  };
+
   @OneToMany(() => StateSection, (section) => section.state)
   sections: StateSection[];
 }
