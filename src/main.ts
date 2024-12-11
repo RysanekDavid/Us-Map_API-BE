@@ -6,11 +6,19 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Validace
+  // Nastavení globální validace
   app.useGlobalPipes(new ValidationPipe());
 
-  // CORS
-  app.enableCors();
+  // Nastavení CORS - povolíme dotazy z FE (localhost:5173)
+  app.enableCors({
+    origin: 'http://localhost:5173', // pokud FE běží na tomto originu
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    allowedHeaders: 'Content-Type, Authorization',
+    credentials: true,
+  });
+
+  // Nastavení globálního prefixu API
+  app.setGlobalPrefix('api');
 
   // Swagger Setup
   const config = new DocumentBuilder()
