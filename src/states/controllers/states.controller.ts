@@ -109,4 +109,12 @@ export class StatesController {
       );
     }
   }
+  @Get('health')
+  @ApiOperation({ summary: 'Health check endpoint' })
+  async healthCheck() {
+    return {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+    };
+  }
 }
