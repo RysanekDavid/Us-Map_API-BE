@@ -74,20 +74,27 @@ export class StatesController {
     return { success: true };
   }
 
+  @Get('statesDetail')
+  @ApiOperation({ summary: 'Get statesDetail.json content' })
+  async getStateDetailFile() {
+    try {
+      const filePath = path.join(__dirname, '../../../data/statesDetail.json');
+      const content = await fs.promises.readFile(filePath, 'utf8');
+      return JSON.parse(content);
+    } catch (error) {
+      throw new HttpException(
+        'Failed to read statesDetail.json',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
   // Nový endpoint pro uložení kompletního statesDetail.json
   @Post('updateDetail')
   @ApiOperation({ summary: 'Update whole statesDetail.json' })
   async updateDetailFile(@Body() updateData: any) {
     try {
-      const filePath = path.join(
-        process.cwd(),
-        '..',
-        'interactive-us-map',
-        'public',
-        'data',
-        'statesDetail.json',
-      );
-
+      const filePath = path.join(__dirname, '../../../data/statesDetail.json');
       await fs.promises.writeFile(
         filePath,
         JSON.stringify(updateData, null, 2),
