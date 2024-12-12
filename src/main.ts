@@ -2,16 +2,20 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { ensureDataFilesExist } from './utils/file.utils';
 
 async function bootstrap() {
+  // Nejdřív zajistíme existenci souborů
+  await ensureDataFilesExist();
+
   const app = await NestFactory.create(AppModule);
 
   // Nastavení globální validace
   app.useGlobalPipes(new ValidationPipe());
 
-  // Nastavení CORS - povolíme dotazy z FE (localhost:5173)
+  // Nastavení CORS - povolíme dotazy z FE (Vercel)
   app.enableCors({
-    origin: 'http://localhost:5173', // pokud FE běží na tomto originu
+    origin: ['http://localhost:5173', 'https://interactive-us-map.vercel.app'], // povolíme oba origins
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders: 'Content-Type, Authorization',
     credentials: true,
