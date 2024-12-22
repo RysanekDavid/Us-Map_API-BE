@@ -1,9 +1,10 @@
-// src/app.module.ts
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
 import { StatesModule } from './states/states.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { AuthController } from './auth/auth.controller';
+import { AuthGuard } from './auth/auth.guard';
 
 @Module({
   imports: [
@@ -16,5 +17,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     }),
     StatesModule,
   ],
+  controllers: [AuthController],
+  providers: [AuthGuard],
 })
 export class AppModule {}

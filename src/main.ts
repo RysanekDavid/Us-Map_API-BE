@@ -3,28 +3,28 @@ import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { ensureDataFilesExist } from './utils/file.utils';
+import { AuthGuard } from './auth/auth.guard';
 
 async function bootstrap() {
-  // Nejdřív zajistíme existenci souborů
   await ensureDataFilesExist();
 
   const app = await NestFactory.create(AppModule);
 
-  // Nastavení globální validace
   app.useGlobalPipes(new ValidationPipe());
 
-  // Nastavení CORS - povolíme dotazy z FE (Vercel)
+  // Výjimka pro login endpoint
+  const authGuard = app.get(AuthGuard);
+  app.useGlobalGuards(authGuard);
+
   app.enableCors({
-    origin: ['http://localhost:5173', 'https://interactive-us-map.vercel.app'], // povolíme oba origins
+    origin: ['http://localhost:5173', 'https://interactive-us-map.vercel.app'],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders: 'Content-Type, Authorization',
     credentials: true,
   });
 
-  // Nastavení globálního prefixu API
   app.setGlobalPrefix('api');
 
-  // Swagger Setup
   const config = new DocumentBuilder()
     .setTitle('US Political Map API')
     .setDescription('API pro správu politické mapy USA')
